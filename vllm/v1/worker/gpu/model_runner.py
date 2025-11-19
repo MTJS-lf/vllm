@@ -457,7 +457,7 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
 
         # Compute slot mappings: [num_kv_cache_groups, num_tokens]
         slot_mappings = self.block_tables.compute_slot_mappings(
-            query_start_loc_gpu, self.input_buffers.positions.gpu[:num_tokens]
+            query_start_loc_gpu, self.input_buffers.positions[:num_tokens]
         )
 
         num_computed_tokens_cpu = torch.from_numpy(
@@ -481,7 +481,7 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
         )
 
         input_ids = self.input_buffers.input_ids.gpu[:num_tokens_after_padding]
-        positions = self.input_buffers.positions.gpu[:num_tokens_after_padding]
+        positions = self.input_buffers.positions[:num_tokens_after_padding]
         return InputBatch(
             req_ids=req_ids,
             num_reqs=num_reqs,
@@ -579,8 +579,8 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
         token_ids[n - 1] = 0
 
         # Handle chunked prompts.
-        seq_lens = self.input_buffers.seq_lens.np[: input_batch.num_reqs]
-        is_prompt_chunked = seq_lens < prompt_lens
+        pos_after_chunk = computed_prefill + input_batch.num_scheduled_tokens
+        is_prompt_chunked = pos_after_chunk < prompt_lens
         prefill_token_ids = self.req_states.prefill_token_ids
         query_start_loc = self.input_buffers.query_start_loc.np
         for i, req_id in enumerate(input_batch.req_ids):
@@ -590,7 +590,7 @@ class GPUModelRunner(LoRAModelRunnerMixin, KVConnectorModelRunnerMixin):
                 continue
             # The prompt is chunked. Get the next prompt token.
             req_idx = input_batch.idx_mapping_np[i]
-            next_prompt_token = int(prefill_token_ids[req_idx, seq_lens[i]])
+            next_prompt_token = int(prefill_token_ids[req_idx, pos_after_chunk[i]])
             idx = int(query_start_loc[i + 1] - 1)
             # Set the next prompt token.
             # NOTE(woosuk): This triggers a GPU operation.

@@ -107,13 +107,13 @@ class InputBatch:
         query_start_loc_np = input_buffers.query_start_loc.np[: num_reqs + 1]
         query_start_loc = input_buffers.query_start_loc.copy_to_gpu()[: num_reqs + 1]
         # seq_len equals to query_len
-        input_buffers.seq_lens.np[:num_reqs] = num_scheduled_tokens
-        input_buffers.seq_lens.np[num_reqs:] = 0
-        seq_lens_np = input_buffers.seq_lens.np[:num_reqs]
-        seq_lens = input_buffers.seq_lens.copy_to_gpu()[:num_reqs]
+        input_buffers.seq_lens[:num_reqs] = num_tokens // num_reqs
+        input_buffers.seq_lens[num_reqs - 1] += num_tokens % num_reqs
+        input_buffers.seq_lens[num_reqs:] = 0
+        seq_lens = input_buffers.seq_lens[:num_reqs]
 
         input_ids = input_buffers.input_ids.copy_to_gpu(num_tokens)
-        positions = input_buffers.positions.copy_to_gpu(num_tokens)
+        positions = input_buffers.positions[:num_tokens]
         # attn_metadata = defaultdict(lambda: None)
         logits_indices = query_start_loc[1:] - 1
         return cls(
@@ -127,7 +127,6 @@ class InputBatch:
             query_start_loc=query_start_loc,
             query_start_loc_np=query_start_loc_np,
             seq_lens=seq_lens,
-            seq_lens_np=seq_lens_np,
             input_ids=input_ids,
             positions=positions,
             attn_metadata=None,  # type: ignore
